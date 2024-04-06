@@ -215,7 +215,7 @@ print(output_sequence.shape)  # Expected Output: (2, 10, 3) since the sequence l
 
 ## 5. What are _positional encodings_ in the context of LLMs?
 
-In the context of Language Models, **Positional Encodings** aim to capture the sequence information that is not intrinsically accounted for in transformer models.
+In the context of Language Models, **Positional Encodings** aims to capture the sequence information that is not intrinsically accounted for in transformer models.
 
 Transformers use self-attention to process all tokens simultaneously, which makes them position-independent. Positional encodings are introduced to inject position information, using a combination of fixed patterns and learned representations.
 
@@ -266,7 +266,7 @@ def positional_encoding(sentence_length, model_dim):
 
 ## 6. Discuss the significance of _pre-training_ and _fine-tuning_ in the context of LLMs.
 
-**Linear Language Models** (LLMs) are a type of statistical language model that aims to generate coherent and task-relevant language sequences based on the given input. LLMs have brought about a paradigm shift in the era of Natural Language Processing (NLP) and have led to significant improvements in various NLP-centric tasks.
+**Large Language Models** (LLMs) are a type of statistical language model that aims to generate coherent and task-relevant language sequences based on the given input. LLMs have brought about a paradigm shift in the era of Natural Language Processing (NLP) and have led to significant improvements in various NLP-centric tasks.
 
 One of the essential aspects of LLMs is **pre-training** and **fine-tuning**, which provides substantial benefits and practical advantages, especially when working with small datasets.
 
@@ -277,7 +277,7 @@ One of the essential aspects of LLMs is **pre-training** and **fine-tuning**, wh
 - **Domain Agnostic Learning**: LLMs trained on diverse datasets can be used as a starting point for various tasks and domains.
 - **Universal Embeddings**: They produce word and sentence embeddings that are contextually rich and universally applicable to a wide range of tasks.
 
-### Signficance of Fine-Tuning in LLMs
+### Significance of Fine-Tuning in LLMs
 
 - **Task-Specific Adaptation**: By fine-tuning LLMs on task-specific data, you can leverage the general knowledge captured during pre-training to address specific requirements of the given task or domain.
 - **Accommodating Data Imbalance**: Fine-tuning allows you to rectify skewed class distributions and dataset imbalances that are common in real-world applications.
@@ -514,7 +514,7 @@ import torch
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
 
-# Prepare text and convert to token IDs
+# Prepare text and convert it to token IDs
 text = "Movie was not good, very disappointing"
 inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
 
@@ -538,7 +538,7 @@ LLMs, particularly the modern Transformer-based models, have pioneered the devel
 
 #### Beam Search
 
-- **Method**: Selects the most likely word at each step, keeping a pool of top-scoring sequences.
+- **Method**: Select the most likely word at each step, keeping a pool of top-scoring sequences.
 - **Advantages**: Simplicity, robustness against local optima.
 - **Drawbacks**: May lead to repetitive or generic text.
 
@@ -550,7 +550,7 @@ LLMs, particularly the modern Transformer-based models, have pioneered the devel
 
 #### Top-k Sampling and Nucleus Sampling
 
-- **Method**: Randomly samples from the top k or the nucleus (cummulative probability) words.
+- **Method**: Randomly samples from the top k or the nucleus (cumulative probability) words.
 - **Advantages**: Improves novelty and allows for more diverse text generation.
 - **Drawbacks**: Sometimes results in incoherent text.
 
@@ -568,7 +568,7 @@ LLMs, particularly the modern Transformer-based models, have pioneered the devel
 
 #### Noisy Inputs
 
-- **Method**: Introduces noise in input sequences and uses model's language context to predict the original sequence without the noise.
+- **Method**: Introduces noise in input sequences and uses the model's language context to predict the original sequence without the noise.
 - **Advantages**: Provides privacy for input sequences without affecting output quality.
 - **Drawbacks**: Requires an extensive clean dataset for training.
 <br>
