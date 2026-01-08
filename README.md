@@ -85,7 +85,7 @@ The **Transformer model** architecture has revolutionized Natural Language Proce
 
 ### Core Components
 
-1. **Encoder-Decoder Structure**: The original Transformer featured separate encoders for processing input sequences and decoders for generating outputs. However, variants like GPT (Generative Pre-trained Transformer) use **only the encoder** for tasks such as language modeling.
+1. **Encoder-Decoder Structure**: The original Transformer featured separate encoders for processing input sequences and decoders for generating outputs. However, variants like GPT (Generative Pre-trained Transformer) use **only the decoder** for tasks such as language modeling.
 
 2. **Self-Attention Mechanism**: This allows the model to weigh different parts of the input sequence when processing each element, forming the core of both encoder and decoder.
 
