@@ -13,72 +13,71 @@
 
 ## 1. What are _Large Language Models (LLMs)_ and how do they work?
 
-**Large Language Models (LLMs)** are advanced artificial intelligence systems trained on massive datasets to understand, process, and generate human-like text. As of 2026, state-of-the-art models like **GPT-5**, **Claude 4**, and **Llama 4** have moved beyond simple text to **multimodal** reasoning and **Mixture-of-Experts (MoE)** architectures.
-
-These models serve as the backbone for complex natural language processing tasks, including code generation, logical reasoning, and autonomous agentic workflows.
+**Large Language Models (LLMs)** are probabilistic artificial intelligence systems designed to recognize patterns, process information, and generate text by predicting the next token in a sequence. Prominent examples include **GPT** (Generative Pre-trained Transformer), **Claude**, and the open-weights **Llama** series.
 
 ### Core Components and Operation
 
 #### Transformer Architecture
-LLMs are built on the **Transformer architecture**, which utilizes **multi-headed self-attention mechanisms**. This allows the model to compute the relevance of every word in a sequence relative to others, capturing long-range dependencies and context.
+LLMs are founded on the **Transformer architecture**, which relies on **Self-Attention mechanisms**. This allows the model to weigh the relevance of different words (tokens) within a context window, regardless of their distance.
+
+The mathematical core of the scaled dot-product attention is:
+
+$$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$
+
+Where $Q$, $K$, and $V$ represent Query, Key, and Value matrices derived from the input embeddings.
 
 ```python
-import torch
 import torch.nn as nn
 
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads)
+        # Modern LLMs typically use GELU activation
         self.feed_forward = nn.Sequential(
             nn.Linear(embed_dim, 4 * embed_dim),
-            nn.GELU(), # Modern LLMs typically use GELU or SwiGLU
+            nn.GELU(), 
             nn.Linear(4 * embed_dim, embed_dim)
         )
-        self.layer_norm1 = nn.LayerNorm(embed_dim)
-        self.layer_norm2 = nn.LayerNorm(embed_dim)
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        # Self-attention with residual connection
-        attn_output, _ = self.attention(x, x, x)
-        x = self.layer_norm1(x + attn_output)
-        # Feed-forward with residual connection
-        ff_output = self.feed_forward(x)
-        return self.layer_norm2(x + ff_output)
+        # Pre-Norm configuration (standard in modern architectures like Llama)
+        x_norm = self.norm1(x)
+        attn_out, _ = self.attention(x_norm, x_norm, x_norm)
+        x = x + attn_out
+        
+        x_norm = self.norm2(x)
+        ff_out = self.feed_forward(x_norm)
+        return x + ff_out
 ```
 
 #### Tokenization and Embeddings
-LLMs process text by breaking it into **tokens** (sub-word units). These are mapped to **embeddings**—high-dimensional vectors in a space $\mathbb{R}^d$ where semantic similarity is represented by mathematical proximity (e.g., cosine similarity).
+LLMs process text by segmenting it into **tokens** (sub-words or characters) via algorithms like **Byte-Pair Encoding (BPE)**. These tokens are converted into **embeddings**—high-dimensional vectors where semantic relationships are encoded geometrically.
 
 ```python
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer
 
-# Using a modern Llama-based architecture for 2026 relevance
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3-8B")
-model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3-8B")
-
-text = "LLM architecture in 2026"
-inputs = tokenizer(text, return_tensors="pt")
-outputs = model.model(**inputs) # Accessing hidden states
-embeddings = outputs.last_hidden_state
+tokenizer = AutoTokenizer.from_pretrained("gpt2")
+text = "Hello, how are you?"
+# Converts text to numerical token IDs
+inputs = tokenizer(text, return_tensors="pt") 
+print(inputs.input_ids)
 ```
-
-#### Self-Attention Mechanism
-The core mathematical operation is scaled dot-product attention:
-$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
-This allows the model to dynamically "focus" on relevant tokens regardless of their distance in the input string.
 
 ### Training Pipeline
 
-1.  **Self-Supervised Pretraining**: The model learns general language patterns by predicting the **next token** across trillions of tokens of diverse data.
-2.  **Supervised Fine-Tuning (SFT)**: The model is refined on high-quality, instruction-based datasets to follow specific commands.
-3.  **Alignment (RLHF/DPO)**: Using **Reinforcement Learning from Human Feedback** or **Direct Preference Optimization** to align model outputs with human safety and utility standards.
+1.  **Self-Supervised Pretraining**: The model learns linguistic patterns and world knowledge by minimizing the loss on next-token prediction over trillions of tokens from diverse datasets.
+2.  **Supervised Fine-Tuning (SFT)**: The pretrained model is trained on high-quality instruction-response pairs to learn task adherence.
+3.  **Alignment (RLHF/DPO)**: Techniques like **Reinforcement Learning from Human Feedback** or **Direct Preference Optimization** refine the model to align with human values (safety, helpfulness).
+4.  **In-Context Learning**: During inference, the model utilizes the prompt context to perform tasks without updating its weights.
 
-### Structural Paradigms
+### Architectures
 
--   **Decoder-Only**: (e.g., GPT-4, Llama) The standard for generative AI, processing text unidirectionally or with causal masking.
--   **Encoder-Decoder**: (e.g., T5) Effective for tasks requiring a full understanding of input before generation, such as translation.
--   **Sparse Mixture-of-Experts (MoE)**: Modern scaling approach where only a subset of parameters (experts) is activated per token, significantly reducing inference latency while maintaining high parameter counts.
+-   **Decoder-Only (e.g., GPT, Llama)**: Unidirectional (autoregressive) processing; the standard for generative tasks.
+-   **Encoder-Only (e.g., BERT)**: Bidirectional processing; optimized for understanding tasks like classification or sentiment analysis.
+-   **Encoder-Decoder (e.g., T5)**: Combines both; utilized for sequence-to-sequence tasks like translation.
 <br>
 
 ## 2. Describe the architecture of a _transformer model_ that is commonly used in LLMs.
