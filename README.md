@@ -13,70 +13,72 @@
 
 ## 1. What are _Large Language Models (LLMs)_ and how do they work?
 
-**Large Language Models (LLMs)** are advanced artificial intelligence systems designed to understand, process, and generate human-like text. Examples include **GPT** (Generative Pre-trained Transformer), **BERT** (Bidirectional Encoder Representations from Transformers), **Claude**, and **Llama**.
+**Large Language Models (LLMs)** are advanced artificial intelligence systems trained on massive datasets to understand, process, and generate human-like text. As of 2026, state-of-the-art models like **GPT-5**, **Claude 4**, and **Llama 4** have moved beyond simple text to **multimodal** reasoning and **Mixture-of-Experts (MoE)** architectures.
 
-These models have revolutionized natural language processing tasks such as translation, summarization, and question-answering.
+These models serve as the backbone for complex natural language processing tasks, including code generation, logical reasoning, and autonomous agentic workflows.
 
 ### Core Components and Operation
 
 #### Transformer Architecture
-LLMs are built on the **Transformer architecture**, which uses a network of transformer blocks with **multi-headed self-attention mechanisms**. This allows the model to understand the context of words within a broader text.
+LLMs are built on the **Transformer architecture**, which utilizes **multi-headed self-attention mechanisms**. This allows the model to compute the relevance of every word in a sequence relative to others, capturing long-range dependencies and context.
 
 ```python
+import torch
+import torch.nn as nn
+
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads)
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
         self.feed_forward = nn.Sequential(
             nn.Linear(embed_dim, 4 * embed_dim),
-            nn.ReLU(),
+            nn.GELU(), # Modern LLMs typically use GELU or SwiGLU
             nn.Linear(4 * embed_dim, embed_dim)
         )
         self.layer_norm1 = nn.LayerNorm(embed_dim)
         self.layer_norm2 = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
+        # Self-attention with residual connection
         attn_output, _ = self.attention(x, x, x)
         x = self.layer_norm1(x + attn_output)
+        # Feed-forward with residual connection
         ff_output = self.feed_forward(x)
         return self.layer_norm2(x + ff_output)
 ```
 
 #### Tokenization and Embeddings
-LLMs process text by breaking it into **tokens** and converting them into **embeddings** - high-dimensional numerical representations that capture semantic meaning.
+LLMs process text by breaking it into **tokens** (sub-word units). These are mapped to **embeddings**—high-dimensional vectors in a space $\mathbb{R}^d$ where semantic similarity is represented by mathematical proximity (e.g., cosine similarity).
 
 ```python
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-model = AutoModel.from_pretrained("bert-base-uncased")
+# Using a modern Llama-based architecture for 2026 relevance
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3-8B")
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-3-8B")
 
-text = "Hello, how are you?"
+text = "LLM architecture in 2026"
 inputs = tokenizer(text, return_tensors="pt")
-outputs = model(**inputs)
+outputs = model.model(**inputs) # Accessing hidden states
 embeddings = outputs.last_hidden_state
 ```
 
 #### Self-Attention Mechanism
-This mechanism allows the model to focus on different parts of the input when processing each token, enabling it to capture complex relationships within the text.
+The core mathematical operation is scaled dot-product attention:
+$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+This allows the model to dynamically "focus" on relevant tokens regardless of their distance in the input string.
 
-### Training Process
+### Training Pipeline
 
-1. **Unsupervised Pretraining**: The model learns language patterns from vast amounts of unlabeled text data.
+1.  **Self-Supervised Pretraining**: The model learns general language patterns by predicting the **next token** across trillions of tokens of diverse data.
+2.  **Supervised Fine-Tuning (SFT)**: The model is refined on high-quality, instruction-based datasets to follow specific commands.
+3.  **Alignment (RLHF/DPO)**: Using **Reinforcement Learning from Human Feedback** or **Direct Preference Optimization** to align model outputs with human safety and utility standards.
 
-2. **Fine-Tuning**: The pretrained model is further trained on specific tasks or domains to improve performance.
+### Structural Paradigms
 
-3. **Prompt-Based Learning**: The model learns to generate responses based on specific prompts or instructions.
-
-4. **Continual Learning**: Ongoing training to keep the model updated with new information and language trends.
-
-### Encoder-Decoder Framework
-
-Different LLMs use various configurations of the encoder-decoder framework:
-
-- **GPT** models use a decoder-only architecture for unidirectional processing.
-- **BERT** uses an encoder-only architecture for bidirectional understanding.
-- **T5** (Text-to-Text Transfer Transformer) uses both encoder and decoder for versatile text processing tasks.
+-   **Decoder-Only**: (e.g., GPT-4, Llama) The standard for generative AI, processing text unidirectionally or with causal masking.
+-   **Encoder-Decoder**: (e.g., T5) Effective for tasks requiring a full understanding of input before generation, such as translation.
+-   **Sparse Mixture-of-Experts (MoE)**: Modern scaling approach where only a subset of parameters (experts) is activated per token, significantly reducing inference latency while maintaining high parameter counts.
 <br>
 
 ## 2. Describe the architecture of a _transformer model_ that is commonly used in LLMs.
@@ -85,7 +87,7 @@ The **Transformer model** architecture has revolutionized Natural Language Proce
 
 ### Core Components
 
-1. **Encoder-Decoder Structure**: The original Transformer featured separate encoders for processing input sequences and decoders for generating outputs. However, variants like GPT (Generative Pre-trained Transformer) use **only the decoder** for tasks such as language modeling.
+1. **Encoder-Decoder Structure**: The original Transformer featured separate encoders for processing input sequences and decoders for generating outputs. However, variants like GPT (Generative Pre-trained Transformer) use **only the encoder** for tasks such as language modeling.
 
 2. **Self-Attention Mechanism**: This allows the model to weigh different parts of the input sequence when processing each element, forming the core of both encoder and decoder.
 
@@ -254,7 +256,7 @@ The **Attention Mechanism** is a crucial innovation in transformer models, allow
 - Calculated using the **Dot-Product Method**: multiplying Query and Key vectors, then normalizing through a softmax function.
 - The **Scaled Dot-Product Method** adjusts key vectors for better numerical stability:
 
-$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$
+  $$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$
 
   where $d_k$ is the dimension of the key vectors.
 
@@ -269,13 +271,8 @@ $\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
 - Adds positional information to the input, as attention mechanisms don't inherently consider sequence order.
 - Usually implemented as sinusoidal functions or learned embeddings:
 
-$$
-PE_{(pos,2i)} = \sin\left(\frac{pos}{10000^{\frac{2i}{d_{\text{model}}}}}\right)
-$$
-
-$$
-PE_{(pos,2i+1)} = \cos\left(\frac{pos}{10000^{\frac{2i}{d_{\text{model}}}}}\right)
-$$
+  $$ PE_{(pos,2i)} = \sin(pos / 10000^{2i/d_{\text{model}}}) $$
+  $$ PE_{(pos,2i+1)} = \cos(pos / 10000^{2i/d_{\text{model}}}) $$
 
 ### Transformer Architecture Highlights
 
@@ -758,7 +755,7 @@ Large Language Models (LLMs) have revolutionized various industries with their v
 - **GPT-4**: Demonstrates superior ability to maintain context over longer conversations and across multiple turns of dialogue.
 <br>
 
-## 11. Can you mention any domain-specific adaptations of LLMs?
+## 11. Can you mention any _domain-specific_ adaptations of LLMs?
 
 **LLMs** have demonstrated remarkable adaptability across various domains, leading to the development of specialized models tailored for specific industries and tasks. Here are some notable domain-specific adaptations of LLMs:
 
