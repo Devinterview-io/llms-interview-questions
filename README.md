@@ -13,71 +13,107 @@
 
 ## 1. What are _Large Language Models (LLMs)_ and how do they work?
 
-**Large Language Models (LLMs)** are probabilistic artificial intelligence systems designed to recognize patterns, process information, and generate text by predicting the next token in a sequence. Prominent examples include **GPT** (Generative Pre-trained Transformer), **Claude**, and the open-weights **Llama** series.
+### **Large Language Models (LLMs)**
+
+**Large Language Models (LLMs)** are probabilistic artificial intelligence systems based on deep learning that predict and generate token sequences. While early models like **BERT** (Encoder-only) focused on understanding, the modern 2026 landscape is dominated by **Causal Decoder-only** architectures (e.g., **GPT-5**, **Llama 4**, **Claude**, **Mistral**) optimized for generative tasks.
+
+These models function as sophisticated statistical engines estimating the conditional probability of the next token $x_t$ given a context window $x_{<t}$:
+
+$$P(x) = \prod_{t=1}^{T} P(x_t | x_{<t})$$
 
 ### Core Components and Operation
 
-#### Transformer Architecture
-LLMs are founded on the **Transformer architecture**, which relies on **Self-Attention mechanisms**. This allows the model to weigh the relevance of different words (tokens) within a context window, regardless of their distance.
+#### Transformer Architecture (2026 Standard)
+LLMs utilize the **Transformer architecture**, relying specifically on **Multi-Head Self-Attention (MHSA)** mechanisms with $O(N^2)$ complexity, often optimized via **FlashAttention-3** kernels.
 
-The mathematical core of the scaled dot-product attention is:
-
-$$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$
-
-Where $Q$, $K$, and $V$ represent Query, Key, and Value matrices derived from the input embeddings.
+Modern implementations diverge from the original 2017 paper by using **Pre-RMSNorm** (Root Mean Square Normalization) for stability and **SwiGLU** (SiLU) activation functions instead of ReLU.
 
 ```python
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-class TransformerBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads):
+class ModernTransformerBlock(nn.Module):
+    def __init__(self, embed_dim: int, num_heads: int, expansion: int = 4):
         super().__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads)
-        # Modern LLMs typically use GELU activation
-        self.feed_forward = nn.Sequential(
-            nn.Linear(embed_dim, 4 * embed_dim),
-            nn.GELU(), 
-            nn.Linear(4 * embed_dim, embed_dim)
-        )
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
-
-    def forward(self, x):
-        # Pre-Norm configuration (standard in modern architectures like Llama)
-        x_norm = self.norm1(x)
-        attn_out, _ = self.attention(x_norm, x_norm, x_norm)
-        x = x + attn_out
+        # RMSNorm is standard in 2026 over LayerNorm
+        self.rms_norm1 = nn.RMSNorm(embed_dim)
+        self.rms_norm2 = nn.RMSNorm(embed_dim)
         
-        x_norm = self.norm2(x)
-        ff_out = self.feed_forward(x_norm)
-        return x + ff_out
+        # FlashAttention backend handled internally by PyTorch 2.5+
+        self.attention = nn.MultiheadAttention(
+            embed_dim, num_heads, batch_first=True
+        )
+        
+        # SwiGLU / SiLU activation pattern
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embed_dim, expansion * embed_dim),
+            nn.SiLU(), 
+            nn.Linear(expansion * embed_dim, embed_dim)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Pre-Normalization Architecture
+        norm_x = self.rms_norm1(x)
+        attn_output, _ = self.attention(norm_x, norm_x, norm_x)
+        x = x + attn_output
+        
+        norm_x_2 = self.rms_norm2(x)
+        ff_output = self.feed_forward(norm_x_2)
+        return x + ff_output
 ```
 
-#### Tokenization and Embeddings
-LLMs process text by segmenting it into **tokens** (sub-words or characters) via algorithms like **Byte-Pair Encoding (BPE)**. These tokens are converted into **embeddings**—high-dimensional vectors where semantic relationships are encoded geometrically.
+#### Tokenization and Rotary Embeddings
+Text is processed via **Byte-Pair Encoding (BPE)** into tokens. Instead of absolute positional embeddings, modern LLMs use **Rotary Positional Embeddings (RoPE)** to better capture relative positions in long contexts (128k+ tokens).
 
 ```python
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
-tokenizer = AutoTokenizer.from_pretrained("gpt2")
-text = "Hello, how are you?"
-# Converts text to numerical token IDs
-inputs = tokenizer(text, return_tensors="pt") 
-print(inputs.input_ids)
+# Using a modern decoder-only architecture example
+model_id = "meta-llama/Meta-Llama-3.1-8B"
+
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id, 
+    device_map="auto", 
+    torch_dtype=torch.bfloat16 # 2026 standard precision
+)
+
+text = "Explain quantum computing."
+inputs = tokenizer(text, return_tensors="pt").to("cuda")
+
+# Generative decoding
+outputs = model.generate(**inputs, max_new_tokens=50)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
+
+#### Self-Attention Mechanism
+The attention mechanism calculates the relevance of tokens using Query ($Q$), Key ($K$), and Value ($V$) matrices. The scaled dot-product attention is defined as:
+
+$$Attention(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+
+This allows the model to attend to relevant historical tokens regardless of distance within the context window.
 
 ### Training Pipeline
 
-1.  **Self-Supervised Pretraining**: The model learns linguistic patterns and world knowledge by minimizing the loss on next-token prediction over trillions of tokens from diverse datasets.
-2.  **Supervised Fine-Tuning (SFT)**: The pretrained model is trained on high-quality instruction-response pairs to learn task adherence.
-3.  **Alignment (RLHF/DPO)**: Techniques like **Reinforcement Learning from Human Feedback** or **Direct Preference Optimization** refine the model to align with human values (safety, helpfulness).
-4.  **In-Context Learning**: During inference, the model utilizes the prompt context to perform tasks without updating its weights.
+1.  **Self-Supervised Pretraining**: The model minimizes the negative log-likelihood loss on trillions of tokens from diverse datasets (code, literature, web data), learning syntax, world knowledge, and reasoning patterns.
 
-### Architectures
+2.  **Supervised Fine-Tuning (SFT)**: The base model is trained on curated high-quality instruction-response pairs to learn instruction following.
 
--   **Decoder-Only (e.g., GPT, Llama)**: Unidirectional (autoregressive) processing; the standard for generative tasks.
--   **Encoder-Only (e.g., BERT)**: Bidirectional processing; optimized for understanding tasks like classification or sentiment analysis.
--   **Encoder-Decoder (e.g., T5)**: Combines both; utilized for sequence-to-sequence tasks like translation.
+3.  **Preference Alignment (DPO/SimPO)**: replacing older RLHF (Reinforcement Learning from Human Feedback) methods, **Direct Preference Optimization (DPO)** aligns the model with human safety and utility standards by directly optimizing the policy against preference data without a separate reward model.
+
+4.  **In-Context Learning (RAG)**: Rather than "continual learning" (which suffers from catastrophic forgetting), modern systems utilize **Retrieval-Augmented Generation (RAG)** to inject real-time data into the prompt context at inference time.
+
+### Architecture Configurations
+
+*   **Decoder-Only (The 2026 Standard):** (e.g., **GPT-4/5**, **Llama**, **Mistral**)
+    *   Unidirectional attention (tokens can only attend to previous tokens).
+    *   Optimized for text generation and zero-shot reasoning.
+*   **Encoder-Only:** (e.g., **ModernBERT**)
+    *   Bidirectional attention.
+    *   Restricted to discriminative tasks like classification or embedding generation; rarely used for chat.
+*   **Encoder-Decoder:** (e.g., **T5**, **Ul2**)
+    *   Used in specific translation or summarization pipelines, but largely superseded by Decoder-only models for general-purpose AI.
 <br>
 
 ## 2. Describe the architecture of a _transformer model_ that is commonly used in LLMs.
