@@ -13,230 +13,170 @@
 
 ## 1. What are _Large Language Models (LLMs)_ and how do they work?
 
-### **Large Language Models (LLMs)**
+**Large Language Models (LLMs)** are advanced artificial intelligence systems designed to understand, process, and generate human-like text. Examples include **GPT** (Generative Pre-trained Transformer), **BERT** (Bidirectional Encoder Representations from Transformers), **Claude**, and **Llama**.
 
-**Large Language Models (LLMs)** are probabilistic artificial intelligence systems based on deep learning that predict and generate token sequences. While early models like **BERT** (Encoder-only) focused on understanding, the modern 2026 landscape is dominated by **Causal Decoder-only** architectures (e.g., **GPT-5**, **Llama 4**, **Claude**, **Mistral**) optimized for generative tasks.
-
-These models function as sophisticated statistical engines estimating the conditional probability of the next token $x_t$ given a context window $x_{<t}$:
-
-$$P(x) = \prod_{t=1}^{T} P(x_t | x_{<t})$$
+These models have revolutionized natural language processing tasks such as translation, summarization, and question-answering.
 
 ### Core Components and Operation
 
-#### Transformer Architecture (2026 Standard)
-LLMs utilize the **Transformer architecture**, relying specifically on **Multi-Head Self-Attention (MHSA)** mechanisms with $O(N^2)$ complexity, often optimized via **FlashAttention-3** kernels.
+#### Transformer Architecture
+LLMs are built on the **Transformer architecture**, which uses a network of transformer blocks with **multi-headed self-attention mechanisms**. This allows the model to understand the context of words within a broader text.
 
-Modern implementations diverge from the original 2017 paper by using **Pre-RMSNorm** (Root Mean Square Normalization) for stability and **SwiGLU** (SiLU) activation functions instead of ReLU.
+```python
+class TransformerBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super().__init__()
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads)
+        self.feed_forward = nn.Sequential(
+            nn.Linear(embed_dim, 4 * embed_dim),
+            nn.ReLU(),
+            nn.Linear(4 * embed_dim, embed_dim)
+        )
+        self.layer_norm1 = nn.LayerNorm(embed_dim)
+        self.layer_norm2 = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        attn_output, _ = self.attention(x, x, x)
+        x = self.layer_norm1(x + attn_output)
+        ff_output = self.feed_forward(x)
+        return self.layer_norm2(x + ff_output)
+```
+
+#### Tokenization and Embeddings
+LLMs process text by breaking it into **tokens** and converting them into **embeddings** - high-dimensional numerical representations that capture semantic meaning.
+
+```python
+from transformers import AutoTokenizer, AutoModel
+
+tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+model = AutoModel.from_pretrained("bert-base-uncased")
+
+text = "Hello, how are you?"
+inputs = tokenizer(text, return_tensors="pt")
+outputs = model(**inputs)
+embeddings = outputs.last_hidden_state
+```
+
+#### Self-Attention Mechanism
+This mechanism allows the model to focus on different parts of the input when processing each token, enabling it to capture complex relationships within the text.
+
+### Training Process
+
+1. **Unsupervised Pretraining**: The model learns language patterns from vast amounts of unlabeled text data.
+
+2. **Fine-Tuning**: The pretrained model is further trained on specific tasks or domains to improve performance.
+
+3. **Prompt-Based Learning**: The model learns to generate responses based on specific prompts or instructions.
+
+4. **Continual Learning**: Ongoing training to keep the model updated with new information and language trends.
+
+### Encoder-Decoder Framework
+
+Different LLMs use various configurations of the encoder-decoder framework:
+
+- **GPT** models use a decoder-only architecture for unidirectional processing.
+- **BERT** uses an encoder-only architecture for bidirectional understanding.
+- **T5** (Text-to-Text Transfer Transformer) uses both encoder and decoder for versatile text processing tasks.
+<br>
+
+## 2. Describe the architecture of a _transformer model_ that is commonly used in LLMs.
+
+### Core Taxonomy of Transformer Architectures
+
+Modern LLMs have diverged from the original "All-you-need" Encoder-Decoder structure. 
+1. **Causal Decoder-Only**: Standard for Generative LLMs (e.g., GPT-4, Llama 3/4). Predicts token $x_{t+1}$ given $x_{1 \dots t}$.
+2. **Encoder-Only**: Used for representation learning (e.g., BERT). Uses bidirectional context.
+3. **Encoder-Decoder**: Used for sequence-to-sequence tasks (e.g., T5, BART).
+
+### Core Components: Scaled Dot-Product Attention
+
+The fundamental operation calculates the relevance of tokens in a sequence of length $n$ and dimension $d$:
+
+$$ \text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V $$
+
+Where $Q, K, V$ are Query, Key, and Value matrices. Complexity is $O(n^2 \cdot d)$.
+
+### Modern Decoder-Only Architecture (2026 Standard)
+
+LLMs in 2026 utilize **Pre-LayerNorm** (specifically **RMSNorm**) and **SwiGLU** activations for enhanced stability at scale.
+
+#### Decoder Block
+The modern decoder employs **Grouped-Query Attention (GQA)** to reduce memory overhead during inference.
 
 ```python
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class ModernTransformerBlock(nn.Module):
-    def __init__(self, embed_dim: int, num_heads: int, expansion: int = 4):
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model: int, n_heads: int, n_kv_heads: int, d_ff: int):
         super().__init__()
-        # RMSNorm is standard in 2026 over LayerNorm
-        self.rms_norm1 = nn.RMSNorm(embed_dim)
-        self.rms_norm2 = nn.RMSNorm(embed_dim)
+        # Pre-normalization using RMSNorm (2026 Standard)
+        self.attention_norm = nn.RMSNorm(d_model)
+        self.ffn_norm = nn.RMSNorm(d_model)
         
-        # FlashAttention backend handled internally by PyTorch 2.5+
-        self.attention = nn.MultiheadAttention(
-            embed_dim, num_heads, batch_first=True
-        )
+        # Grouped-Query Attention for KV-Cache efficiency
+        self.attention = GroupedQueryAttention(d_model, n_heads, n_kv_heads)
+        self.feed_forward = SwiGLUFeedForward(d_model, d_ff)
         
-        # SwiGLU / SiLU activation pattern
-        self.feed_forward = nn.Sequential(
-            nn.Linear(embed_dim, expansion * embed_dim),
-            nn.SiLU(), 
-            nn.Linear(expansion * embed_dim, embed_dim)
-        )
+    def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
+        # Residual Connection with Pre-LN
+        h = x + self.attention(self.attention_norm(x), mask)
+        out = h + self.feed_forward(self.ffn_norm(h))
+        return out
+```
+
+#### Rotary Positional Embeddings (RoPE)
+Static sinusoidal encodings are deprecated. Modern LLMs use **RoPE**, which encodes absolute position with a rotation matrix, naturally handling long-context extrapolation.
+
+The transformation for a vector $x$ at position $m$ is:
+$$ f(x, m) = \begin{pmatrix} \cos m\theta & -\sin m\theta \\ \sin m\theta & \cos m\theta \end{pmatrix} \begin{pmatrix} x_1 \\ x_2 \end{pmatrix} $$
+
+#### Grouped-Query Attention (GQA)
+GQA bridges Multi-Head Attention (MHA) and Multi-Query Attention (MQA) by grouping query heads to share a single Key/Value head, optimizing the $O(n)$ memory cost of the KV cache.
+
+```python
+class GroupedQueryAttention(nn.Module):
+    def __init__(self, d_model: int, n_heads: int, n_kv_heads: int):
+        super().__init__()
+        self.n_heads = n_heads
+        self.n_kv_heads = n_kv_heads
+        self.head_dim = d_model // n_heads
+        
+        self.wq = nn.Linear(d_model, n_heads * self.head_dim, bias=False)
+        self.wk = nn.Linear(d_model, n_kv_heads * self.head_dim, bias=False)
+        self.wv = nn.Linear(d_model, n_kv_heads * self.head_dim, bias=False)
+        self.wo = nn.Linear(n_heads * self.head_dim, d_model, bias=False)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
+        # Implementation involves repeating KV heads to match Q head count
+        # logic omitted for brevity
+        pass
+```
+
+#### SwiGLU Activation Function
+Modern LLMs replace ReLU with **SwiGLU**, which provides better gradient flow and non-linearity.
+
+$$ \text{SwiGLU}(x, W, V, b, c) = \text{Swish}_{\beta}(xW + b) \otimes (xV + c) $$
+
+```python
+class SwiGLUFeedForward(nn.Module):
+    def __init__(self, d_model: int, d_ff: int):
+        super().__init__()
+        # Expansion factor is typically 8/3 for SwiGLU
+        self.w1 = nn.Linear(d_model, d_ff, bias=False)
+        self.w2 = nn.Linear(d_ff, d_model, bias=False)
+        self.w3 = nn.Linear(d_model, d_ff, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Pre-Normalization Architecture
-        norm_x = self.rms_norm1(x)
-        attn_output, _ = self.attention(norm_x, norm_x, norm_x)
-        x = x + attn_output
-        
-        norm_x_2 = self.rms_norm2(x)
-        ff_output = self.feed_forward(norm_x_2)
-        return x + ff_output
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
 ```
 
-#### Tokenization and Rotary Embeddings
-Text is processed via **Byte-Pair Encoding (BPE)** into tokens. Instead of absolute positional embeddings, modern LLMs use **Rotary Positional Embeddings (RoPE)** to better capture relative positions in long contexts (128k+ tokens).
+### Critical Architectural Advantages
 
-```python
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
-# Using a modern decoder-only architecture example
-model_id = "meta-llama/Meta-Llama-3.1-8B"
-
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-model = AutoModelForCausalLM.from_pretrained(
-    model_id, 
-    device_map="auto", 
-    torch_dtype=torch.bfloat16 # 2026 standard precision
-)
-
-text = "Explain quantum computing."
-inputs = tokenizer(text, return_tensors="pt").to("cuda")
-
-# Generative decoding
-outputs = model.generate(**inputs, max_new_tokens=50)
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
-```
-
-#### Self-Attention Mechanism
-The attention mechanism calculates the relevance of tokens using Query ($Q$), Key ($K$), and Value ($V$) matrices. The scaled dot-product attention is defined as:
-
-$$Attention(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
-
-This allows the model to attend to relevant historical tokens regardless of distance within the context window.
-
-### Training Pipeline
-
-1.  **Self-Supervised Pretraining**: The model minimizes the negative log-likelihood loss on trillions of tokens from diverse datasets (code, literature, web data), learning syntax, world knowledge, and reasoning patterns.
-
-2.  **Supervised Fine-Tuning (SFT)**: The base model is trained on curated high-quality instruction-response pairs to learn instruction following.
-
-3.  **Preference Alignment (DPO/SimPO)**: replacing older RLHF (Reinforcement Learning from Human Feedback) methods, **Direct Preference Optimization (DPO)** aligns the model with human safety and utility standards by directly optimizing the policy against preference data without a separate reward model.
-
-4.  **In-Context Learning (RAG)**: Rather than "continual learning" (which suffers from catastrophic forgetting), modern systems utilize **Retrieval-Augmented Generation (RAG)** to inject real-time data into the prompt context at inference time.
-
-### Architecture Configurations
-
-*   **Decoder-Only (The 2026 Standard):** (e.g., **GPT-4/5**, **Llama**, **Mistral**)
-    *   Unidirectional attention (tokens can only attend to previous tokens).
-    *   Optimized for text generation and zero-shot reasoning.
-*   **Encoder-Only:** (e.g., **ModernBERT**)
-    *   Bidirectional attention.
-    *   Restricted to discriminative tasks like classification or embedding generation; rarely used for chat.
-*   **Encoder-Decoder:** (e.g., **T5**, **Ul2**)
-    *   Used in specific translation or summarization pipelines, but largely superseded by Decoder-only models for general-purpose AI.
-<br>
-
-## 2. Describe the architecture of a _transformer model_ that is commonly used in LLMs.
-
-The **Transformer model** architecture has revolutionized Natural Language Processing (NLP) due to its ability to capture long-range dependencies and outperform previous methods. Its foundation is built on **attention mechanisms**.
-
-### Core Components
-
-1. **Encoder-Decoder Structure**: The original Transformer featured separate encoders for processing input sequences and decoders for generating outputs. However, variants like GPT (Generative Pre-trained Transformer) use **only the encoder** for tasks such as language modeling.
-
-2. **Self-Attention Mechanism**: This allows the model to weigh different parts of the input sequence when processing each element, forming the core of both encoder and decoder.
-
-### Model Architecture
-
-#### Encoder
-
-The encoder consists of multiple identical layers, each containing:
-
-1. **Multi-Head Self-Attention Module**
-2. **Feed-Forward Neural Network**
-
-```python
-class EncoderLayer(nn.Module):
-    def __init__(self, d_model, num_heads, d_ff):
-        super().__init__()
-        self.self_attn = MultiHeadAttention(d_model, num_heads)
-        self.feed_forward = FeedForward(d_model, d_ff)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        
-    def forward(self, x):
-        x = x + self.self_attn(self.norm1(x))
-        x = x + self.feed_forward(self.norm2(x))
-        return x
-```
-
-#### Decoder
-
-The decoder also consists of multiple identical layers, each containing:
-
-1. **Masked Multi-Head Self-Attention Module**
-2. **Multi-Head Encoder-Decoder Attention Module**
-3. **Feed-Forward Neural Network**
-
-#### Positional Encoding
-
-To incorporate sequence order information, positional encodings are added to the input embeddings:
-
-```python
-def positional_encoding(max_seq_len, d_model):
-    pos = np.arange(max_seq_len)[:, np.newaxis]
-    i = np.arange(d_model)[np.newaxis, :]
-    angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
-    angle_rads = pos * angle_rates
-    
-    sines = np.sin(angle_rads[:, 0::2])
-    cosines = np.cos(angle_rads[:, 1::2])
-    
-    pos_encoding = np.concatenate([sines, cosines], axis=-1)
-    return torch.FloatTensor(pos_encoding)
-```
-
-#### Multi-Head Attention
-
-The multi-head attention mechanism allows the model to jointly attend to information from different representation subspaces:
-
-```python
-class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        super().__init__()
-        self.num_heads = num_heads
-        self.d_model = d_model
-        assert d_model % num_heads == 0
-        
-        self.depth = d_model // num_heads
-        self.wq = nn.Linear(d_model, d_model)
-        self.wk = nn.Linear(d_model, d_model)
-        self.wv = nn.Linear(d_model, d_model)
-        self.dense = nn.Linear(d_model, d_model)
-        
-    def split_heads(self, x, batch_size):
-        x = x.view(batch_size, -1, self.num_heads, self.depth)
-        return x.permute(0, 2, 1, 3)
-    
-    def forward(self, q, k, v, mask=None):
-        batch_size = q.size(0)
-        
-        q = self.split_heads(self.wq(q), batch_size)
-        k = self.split_heads(self.wk(k), batch_size)
-        v = self.split_heads(self.wv(v), batch_size)
-        
-        scaled_attention = scaled_dot_product_attention(q, k, v, mask)
-        concat_attention = scaled_attention.permute(0, 2, 1, 3).contiguous()
-        concat_attention = concat_attention.view(batch_size, -1, self.d_model)
-        
-        return self.dense(concat_attention)
-```
-
-#### Feed-Forward Network
-
-Each encoder and decoder layer includes a fully connected feed-forward network:
-
-```python
-class FeedForward(nn.Module):
-    def __init__(self, d_model, d_ff):
-        super().__init__()
-        self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
-        
-    def forward(self, x):
-        return self.linear2(F.relu(self.linear1(x)))
-```
-
-### Training Procedure
-
-- **Encoder-Decoder Models**: Use teacher forcing during training.
-- **GPT-style Models**: Employ self-learning schedules with the encoder only.
-
-### Advantages
-
-- **Scalability**: Transformer models can be scaled up to handle word-level or subword-level tokens.
-- **Adaptability**: The architecture can accommodate diverse input modalities, including text, images, and audio.
-
+1.  **Computational Efficiency**: $O(1)$ inference per token (given KV-cache), while training remains $O(n)$ parallelizable.
+2.  **KV-Cache Optimization**: GQA reduces the memory footprint of $K$ and $V$ tensors by a factor of $\frac{\text{n\_heads}}{\text{n\_kv\_heads}}$, critical for 100k+ context windows.
+3.  **Stability**: Pre-layer normalization (RMSNorm) prevents internal covariate shift in deep networks (e.g., >100 layers), allowing for higher learning rates without divergence.
 <br>
 
 ## 3. What are the main differences between _LLMs_ and traditional _statistical language models_?
